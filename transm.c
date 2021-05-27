@@ -3,36 +3,21 @@
 struct pollfd fds[BACKLOG + 1];
 char buf[BUFSIZE];
 char enc_buf[ENC_BUFSIZE];
+int intrasc;
 
 int nfds = 2;
-int log = 1;
+int logv = 1;
 int port = 8080;
 int exit_status = -1;
-
-
-void server_close(int signal){
-	for(int i = 0; fds[i].fd != 0; i++){
-		if(fds[i].fd != CLOSED){
-			close(fds[i].fd);
-		}
-	}
-	printf("transmitter on [%d] terminated succesfully\n", port);
-	exit(exit_status);
-}
+int exit_name = "transmitter";
 
 void check_args(int argc, char *argv[]){
 	if(argc - 1 < MIN_ARGC){
-		printf("%d args needed (port, log), but got only %d.\n",MIN_ARGC, argc - 1);
+		printf("%d args needed (port, logv), but got only %d.\n",MIN_ARGC, argc - 1);
 		exit(EXIT_FAILURE);
 	}
 	port = atoi(argv[1]);
-	log = atoi(argv[2]);
-}
-
-void set_signal(){
-	static struct sigaction act;
-	act.sa_handler = server_close;
-	sigaction(SIGINT, &act, NULL);
+	logv = atoi(argv[2]);
 }
 
 void init_server(int *sc, int *intrasc, struct sockaddr_in *addr){
@@ -51,7 +36,7 @@ void init_server(int *sc, int *intrasc, struct sockaddr_in *addr){
 	if(bind(*sc, (struct sockaddr*)addr, sizeof(*addr)) == -1){
 		perror("bind error");
 	}
-	if(listen(*sc, BACKLOG) == -1){
+	if(listen(*sc, BACKLOGv) == -1){
 		perror("listen error");
 	}
 
@@ -75,35 +60,18 @@ void init_server(int *sc, int *intrasc, struct sockaddr_in *addr){
 	printf("transmitter on [%d] set up and running\n", port);
 }
 
-void clearbufs(){
-	memset(buf, 0, BUFSIZE);
-	memset(enc_buf, 0 , ENC_BUFSIZE);
-}
-
-void test_for_poll_error(int i){
-	if(
-		fds[i].revents != POLLIN && 
-		fds[i].revents != (POLLIN|POLLHUP)
-		)
-	{
-		fprintf(stderr, "revents %d instead of POLLIN\n", fds[i].revents);
-		perror("poll error");
-		server_close(0);
-	}
-}
-
 void accept_one_pending(int sc, int intrasc){
 	int cl;
 	if((cl = accept(sc, NULL, NULL)) == -1){
 		perror("accept error");
 	}
-	if(nfds > BACKLOG){
+	if(nfds > BACKLOGv){
 		perror("too much connections, accepting but ignoring");
 		return;
 	}
 	fds[nfds].fd = cl;
 	fds[nfds].events = POLLIN;
-	send_operation(intrasc, nfds, CONNECT, enc_buf);
+	send_operation(nfds, CONNECT);
 	nfds++;
 }
 
@@ -115,7 +83,7 @@ void do_operation(){
 	} else {
 		close(fds[connection_number].fd);
 		fds[connection_number].fd = CLOSED;
-		if(log) printf("[%d] dropped from startpoint\n", connection_number);
+		if(logv) printf("[%d] dropped from startpoint\n", connection_number);
 	}
 }
 
@@ -124,7 +92,7 @@ int main(int argc, char ** argv){
 	set_signal();
 
 	struct sockaddr_in addr;
-	int sc, intrasc;
+	int sc;
 	init_server(&sc, &intrasc, &addr);
 
 	for(;;){
@@ -150,19 +118,22 @@ int main(int argc, char ** argv){
 
 			printf("#################\n");
 			if(fds[i].fd == sc){
-				if(log) printf("accept\n");
+				if(logv) printf("accept\n");
 				accept_one_pending(sc, intrasc);
+
 			} else if(fds[i].fd == intrasc){
-				if(log) printf("back\n");
+
+				if(logv) printf("back\n");
 				clearbufs();
-				int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i, fds, enc_buf, intrasc);
-				if(log) printf("%d was read\n", enc_len);
-				process_whole_enc_buf(enc_len, enc_buf, buf, fds);
+				int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
+				process_whole_enc_buf(enc_len);
+
 			} else {
-				if(log) printf("to\n");
+
+				if(logv) printf("to\n");
 				clearbufs();
-				read_to_buf(buf, BUFSIZE, i, fds, enc_buf, intrasc);
-				forward_to_intra(intrasc, i);
+				read_to_buf(buf, BUFSIZE, i);
+				forward_to_intra(i);
 			}
 		}
 	}

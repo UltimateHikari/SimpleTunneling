@@ -1,10 +1,15 @@
 #include "forward.h"
 
-extern struct pollfd* fds;
+extern struct pollfd fds[];
 extern char buf[];
 extern char enc_buf[];
+extern int intrasc;
 
-int encode(int connection_number, char* enc_buf, char* buf){
+extern int exit_status;
+extern char* exit_name;
+extern int port;
+
+int encode(int connection_number){
 	//returns length of buffer;
 	enc_buf[0] = MBYTE;
 	enc_buf[1] = connection_number;
@@ -22,7 +27,7 @@ int encode(int connection_number, char* enc_buf, char* buf){
 	return enc_i + 3;
 }
 
-int decode(int *connection_number, int *enc_index_offset, char *enc_buf, char* buf){
+int decode(int *connection_number, int *enc_index_offset){
 	//returns new length & shifts offset;
 	int i, enc_i = *enc_index_offset;
 	*connection_number = enc_buf[enc_i + 1];
@@ -43,18 +48,18 @@ int decode(int *connection_number, int *enc_index_offset, char *enc_buf, char* b
 	}	
 }
 
-int read_to_buf(char * buf, int bufsize, int i, struct pollfd* fds, char* enc_buf, int intrasc){
+int read_to_buf(char * buf, int bufsize, int i){
 	int res, cl;
 	cl = fds[i].fd;
 	if( (res = read(cl, buf, bufsize)) > 0){
-		printf("[%d] sent:\n", i);
+		printf("read from [%d] %d bytes\n", i, res);
 	}
 
 	if(res == 0){
 		printf("[%d] disconnected\n", i);
 		close(cl);
 		fds[i].fd = CLOSED;
-		send_operation(intrasc, i, DROP, enc_buf);
+		send_operation(i, DROP);
 	}
 
 	if(res == -1){
@@ -64,47 +69,40 @@ int read_to_buf(char * buf, int bufsize, int i, struct pollfd* fds, char* enc_bu
 	return res;
 }
 
-void forward_to_endpoint(int i, int length, struct pollfd* fds, char* buf){
-	printf("writing to %d from %d\n", fds[i].fd, i);
-	if (write(fds[i].fd, buf, length) != length) {
-		if (length > 0) 
-			fprintf(stderr,"partial write");
-		else {
-			perror("write error");
-			exit(-1);
-		}
-	}
-
-	printf("[%d] %d bytes transmitted\n", i, length);
-}
-
 void process_whole_enc_buf(int enc_len){
 	int connection_number, enc_offset = 0;
 	while(enc_offset < enc_len){
-		int length = decode(&connection_number, &enc_offset, enc_buf, buf);
+		int length = decode(&connection_number, &enc_offset);
 		printf("connection_number[%d] with %d\n", connection_number, length);
 		if(connection_number == 0){
 			do_operation();
 		}else{
-			forward_to_endpoint(connection_number, length, fds, buf);
+			forward_to_endpoint(connection_number, length);
 		}
 		printf("processed %d/%d\n", enc_offset, enc_len);
 	}
 }
 
-void forward_to_intra(int intrasc, int i){
-	int length = encode(i, enc_buf, buf), elength;
+void clearbufs(){
+	memset(buf, 0, BUFSIZE);
+	memset(enc_buf, 0 , ENC_BUFSIZE);
+}
+
+void send_to_intra(int length){
+	int elength;
 	if (elength = write(intrasc, enc_buf, length) != length) {
 		if (length > 0) 
-			fprintf(stderr,"partial write: %d/%d", elength, length);
+			fprintf(stderr,"partial write: %d/%d\n", elength, length);
 		else {
 			perror("write error");
 			exit(-1);
 		}
 	}
+	printf("[intra] %d bytes sent\n", length);
 }
 
-void send_operation(int intrasc, int connection_number, int operation){
+void send_operation(int connection_number, int operation){
+	clearbufs();
 	int length = 6;
 	enc_buf[0] = MBYTE;
 	enc_buf[1] = 0;
@@ -117,12 +115,51 @@ void send_operation(int intrasc, int connection_number, int operation){
 		enc_buf[6] = 0;
 		length = 7;
 	}
-	if (write(intrasc, enc_buf, length) != length) {
+	send_to_intra(length);
+}
+
+void forward_to_intra(int i){
+	int length = encode(i);
+	send_to_intra(length);
+}
+
+void forward_to_endpoint(int i, int length){
+	if (write(fds[i].fd, buf, length) != length) {
 		if (length > 0) 
 			fprintf(stderr,"partial write");
 		else {
 			perror("write error");
 			exit(-1);
 		}
+	}
+
+	printf("[%d] %d bytes sent\n", i, length);
+}
+
+void server_close(int signal){
+	for(int i = 0; fds[i].fd != 0; i++){
+		if(fds[i].fd != CLOSED){
+			close(fds[i].fd);
+		}
+	}
+	printf("%s on [%d] terminated succesfully\n", exit_name, port);
+	exit(exit_status);
+}
+
+void set_signal(){
+	static struct sigaction act;
+	act.sa_handler = server_close;
+	sigaction(SIGINT, &act, NULL);
+}
+
+void test_for_poll_error(int i){
+	if(
+		fds[i].revents != POLLIN && 
+		fds[i].revents != (POLLIN|POLLHUP)
+		)
+	{
+		fprintf(stderr, "revents %d instead of POLLIN\n", fds[i].revents);
+		perror("poll error");
+		server_close(0);
 	}
 }

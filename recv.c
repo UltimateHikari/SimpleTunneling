@@ -1,38 +1,27 @@
 #include "forward.h"
+#define INTRASOCK_INDEX 0
+#define INTRASERV_INDEX 1
 
 struct pollfd fds[BACKLOG + 1];
 char buf[BUFSIZE];
 char enc_buf[ENC_BUFSIZE];
+int intrasc = CLOSED;
+int intraserver;
+
 
 int nfds = 2;
-int log = 1;
+int logv = 1;
 int port = 8080;
 int exit_status = -1;
-
-
-void server_close(int signal){
-	for(int i = 0; fds[i].fd != 0; i++){
-		if(fds[i].fd != CLOSED){
-			close(fds[i].fd);
-		}
-	}
-	printf("reciever on [%d] terminated succesfully\n", port);
-	exit(exit_status);
-}
+char* exit_name = "reciever";
 
 void check_args(int argc, char *argv[]){
 	if(argc - 1 < MIN_ARGC){
-		printf("%d args needed (dest port, log), but got only %d.\n",MIN_ARGC, argc - 1);
+		printf("%d args needed (dest port, logv), but got only %d.\n",MIN_ARGC, argc - 1);
 		exit(EXIT_FAILURE);
 	}
 	port = atoi(argv[1]);
-	log = atoi(argv[2]);
-}
-
-void set_signal(){
-	static struct sigaction act;
-	act.sa_handler = server_close;
-	sigaction(SIGINT, &act, NULL);
+	logv = atoi(argv[2]);
 }
 
 void init_server(int *intrasc, int *intraserver, struct sockaddr_in *addr, char buf[]){
@@ -58,42 +47,25 @@ void init_server(int *intrasc, int *intraserver, struct sockaddr_in *addr, char 
 	}
 	
 	memset(buf, 0, BUFSIZE);
-	fds[0].fd = *intrasc;
-	fds[1].fd = *intraserver;
-	fds[1].events = POLLIN;
+	fds[INTRASOCK_INDEX].fd = *intrasc;
+	fds[INTRASERV_INDEX].fd = *intraserver;
+	fds[INTRASERV_INDEX].events = POLLIN;
 
 	printf("reciever on [%d] set up and running\n", port);
 }
 
-void test_for_poll_error(int i){
-	if(
-		fds[i].revents != POLLIN && 
-		fds[i].revents != (POLLIN|POLLHUP)
-		)
-	{
-		fprintf(stderr, "revents %d instead of POLLIN\n", fds[i].revents);
-		perror("poll error");
-		server_close(0);
-	}
-}
-
-void accept_one_pending_once(int sc, int *intrasc){
+void accept_one_pending_once(int sc){
 	int cl;
-	if(fds[0].fd != CLOSED){
+	if(fds[INTRASOCK_INDEX].fd != CLOSED){
 		printf("Error: connecting second transmitter\n");
 		exit(EXIT_FAILURE);
 	}
 	if((cl = accept(sc, NULL, NULL)) == -1){
 		perror("accept error");
 	}
-	fds[0].fd = cl;
-	fds[0].events = POLLIN;
-	*intrasc = cl;
-}
-
-void clearbufs(){
-	memset(buf, 0, BUFSIZE);
-	memset(enc_buf, 0 , ENC_BUFSIZE);
+	fds[INTRASOCK_INDEX].fd = cl;
+	fds[INTRASOCK_INDEX].events = POLLIN;
+	intrasc = cl;
 }
 
 void connect_new(int i){
@@ -122,12 +94,50 @@ void do_operation(){
 	int connection_number = buf[1];
 	if(buf[0] == CONNECT){
 		connect_new(connection_number);
-		if(log) printf("[%d] connected to endpoint\n", connection_number);
+		if(logv) printf("[%d] connected to endpoint\n", connection_number);
 	} else {
 		close(fds[connection_number].fd);
 		fds[connection_number].fd = CLOSED;
-		if(log) printf("[%d] dropped from endpoint\n", connection_number);
+		if(logv) printf("[%d] dropped from endpoint\n", connection_number);
 	}
+}
+
+void switch_behaviour(int i){
+	printf("#################\n");
+	switch(i){
+		case INTRASERV_INDEX:
+			accept_one_pending_once(intraserver);
+			if(logv) printf("accept\n");
+			break;
+		case INTRASOCK_INDEX:
+			clearbufs();
+			if(logv) printf("to\n");
+			int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
+			process_whole_enc_buf(enc_len);
+			break;
+		default:
+			if(logv) printf("back\n");
+			int len = read_to_buf(buf, BUFSIZE, i);
+			forward_to_intra(i);
+			break;
+	}
+			// if(fds[i].fd == intraserver){
+			// 	accept_one_pending_once(intraserver);
+			// 	if(logv) printf("accept\n");
+
+			// } else if(fds[i].fd == intrasc){
+
+			// 	clearbufs();
+			// 	if(logv) printf("to\n");
+			// 	int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
+			// 	process_whole_enc_buf(enc_len);
+
+			// } else {
+
+			// 	if(logv) printf("back\n");
+			// 	int len = read_to_buf(buf, BUFSIZE, i);
+			// 	forward_to_intra(i);
+			// }
 }
 
 int main(int argc, char ** argv){
@@ -135,7 +145,6 @@ int main(int argc, char ** argv){
 	set_signal();
 
 	struct sockaddr_in addr;
-	int intrasc = CLOSED, intraserver;
 	int enc_offset = 0;
 	init_server(&intrasc, &intraserver, &addr, buf);
 
@@ -151,30 +160,14 @@ int main(int argc, char ** argv){
 			//printf("poll [%dms]: expired\n", TIMEOUT);
 			continue;
 		}
+
 		int snapshot_size = nfds;
 		for(int i = 0; i < snapshot_size; i++){
-			
 			if(fds[i].revents == 0){
 				continue;
 			}
-
 			test_for_poll_error(i);
-
-			printf("#################\n");
-			if(fds[i].fd == intraserver){
-				accept_one_pending_once(intraserver, &intrasc);
-				if(log) printf("accept\n");
-			} else if(fds[i].fd == intrasc){
-				clearbufs();
-				if(log) printf("to\n");
-				int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i, fds, enc_buf, intrasc);
-				if(log) printf("%d was read\n", enc_len);
-				process_whole_enc_buf(enc_len, enc_buf, buf, fds);
-			} else {
-				if(log) printf("back\n");
-				int len = read_to_buf(buf, BUFSIZE, i, fds, enc_buf, intrasc);
-				forward_to_intra(intrasc, i);
-			}
+			switch_behaviour(i);
 		}
 	}
 

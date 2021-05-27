@@ -23,12 +23,18 @@
 #define CONNECT 1
 #define DROP 2
 
-int encode(int connection_number, char* enc_buf, char* buf);
-int decode(int *connection_number, int *enc_index_offset, char* enc_buf, char* buf);
-int read_to_buf(char * buf, int bufsize, int i, struct pollfd* fds, char* enc_buf, int intrasc);
+int encode(int connection_number);
+int decode(int *connection_number, int *enc_index_offset);
+
+int read_to_buf(char * buf, int bufsize, int i);
+void process_whole_enc_buf(int enc_len);
+
+void clearbufs();
+void send_operation(int connection_number, int operation);
+void forward_to_intra(int i);
+void forward_to_endpoint(int i, int length);
+
 void server_close(int signal);
-void forward_to_endpoint(int i, int length, struct pollfd* fds, char* buf);
-void process_whole_enc_buf(int enc_len, char* enc_buf, char* buf, struct pollfd* fds);
+void set_signal();
+void test_for_poll_error(int i);
 void do_operation();
-void send_operation(int intrasc, int connection_number, int operation, char*enc_buf);
-void forward_to_intra(int intrasc, int i);
