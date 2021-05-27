@@ -10,6 +10,7 @@ extern char* exit_name;
 extern int port;
 
 int encode(int connection_number){
+	printf("encoding |%s|\n", buf);
 	//returns length of buffer;
 	enc_buf[0] = MBYTE;
 	enc_buf[1] = connection_number;
@@ -21,6 +22,7 @@ int encode(int connection_number){
 			enc_buf[enc_i] = MBYTE;
 		}
 	}
+	//extra byte in decoding comes from here
 	enc_buf[enc_i] = '\0';
 	enc_buf[enc_i + 1] = MBYTE;
 	enc_buf[enc_i + 2] = 0;
@@ -36,7 +38,7 @@ int decode(int *connection_number, int *enc_index_offset){
 		//TODO can fall out of buf here, relying on short messages - lazy impl
 		if(enc_buf[enc_i] == MBYTE){
 			if(enc_buf[enc_i + 1] != MBYTE){
-				*enc_index_offset = enc_i + 2;
+				*enc_index_offset = enc_i + 2;printf("decodedd |%s|\n", buf);
 				return i;
 			} else {
 				buf[i] = enc_buf[enc_i];
@@ -45,7 +47,8 @@ int decode(int *connection_number, int *enc_index_offset){
 		} else {
 			buf[i] = enc_buf[enc_i];
 		}
-	}	
+	}
+	printf("decoded |%s|\n", buf);
 }
 
 void clearbufs(){
@@ -65,7 +68,7 @@ int read_to_buf(char * buf, int bufsize, int i){
 		printf("[%d] disconnected\n", i);
 		close(cl);
 		fds[i].fd = CLOSED;
-		send_operation(i, DROP);
+		//send_operation(i, DROP);
 	}
 
 	if(res == -1){

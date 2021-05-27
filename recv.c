@@ -147,7 +147,8 @@ int main(int argc, char ** argv){
 		}
 
 		int snapshot_size = nfds;
-		for(int i = 0; i < snapshot_size; i++){
+		for(int i = snapshot_size - 1; i > -1; i--){
+			// for preventing closing before writing all data
 			if(fds[i].revents == 0){
 				continue;
 			}

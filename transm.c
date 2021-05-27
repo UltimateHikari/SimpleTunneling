@@ -80,7 +80,7 @@ void accept_one_pending(){
 void do_operation(){
 	int connection_number = buf[1];
 	if(buf[0] == CONNECT){
-		printf("error: told to connect [%d]\n", connection_number);
+		printf("error: %s told to connect [%d]\n", exit_name, connection_number);
 		server_close(1);
 	} else {
 		close(fds[connection_number].fd);
@@ -132,7 +132,7 @@ int main(int argc, char ** argv){
 		}
 
 		int snapshot_size = nfds;
-		for(int i = 0; i < snapshot_size; i++){
+		for(int i = snapshot_size - 1; i > -1; i--){
 			if(fds[i].revents == 0){
 				continue;
 			}
