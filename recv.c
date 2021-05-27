@@ -1,6 +1,7 @@
 #include "forward.h"
 #define INTRASOCK_INDEX 0
 #define INTRASERV_INDEX 1
+#define MIN_ARGC 3
 
 struct pollfd fds[BACKLOG + 1];
 char buf[BUFSIZE];
@@ -11,17 +12,21 @@ int intraserver;
 
 int nfds = 2;
 int logv = 1;
+char* hostname;
+char *portname;
 int port = 8080;
 int exit_status = -1;
 char* exit_name = "reciever";
 
 void check_args(int argc, char *argv[]){
 	if(argc - 1 < MIN_ARGC){
-		printf("%d args needed (dest port, logv), but got only %d.\n",MIN_ARGC, argc - 1);
+		printf("%d args needed (hostname, port, logv), but got only %d.\n",MIN_ARGC, argc - 1);
 		exit(EXIT_FAILURE);
 	}
-	port = atoi(argv[1]);
-	logv = atoi(argv[2]);
+	hostname = argv[1];
+	portname = argv[2];
+	port = atoi(argv[2]);
+	logv = atoi(argv[3]);
 }
 
 void init_server(int *intrasc, int *intraserver, struct sockaddr_in *addr, char buf[]){
@@ -73,12 +78,18 @@ void connect_new(int i){
 	if((sc = socket(AF_INET, SOCK_STREAM, DEFAULT_PROTOCOL)) == -1){
 		perror("intra instantiation error");
 	}
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = INADDR_ANY;
-	if(connect(sc, (struct sockaddr*)&addr, sizeof(addr)) == -1){
+	struct addrinfo *result = NULL;
+	struct addrinfo *ptr = NULL;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	
+	if(getaddrinfo(hostname, portname, &hints, &result)){
+		perror(hostname);
+	}
+
+	if(connect(sc, (struct sockaddr*)result->ai_addr, sizeof(*(result->ai_addr))) == -1){
 		perror("endpoint connect error");
 		exit(EXIT_FAILURE);
 	}
@@ -120,7 +131,7 @@ void switch_behaviour(int i){
 		default:
 			if(logv) printf("back\n");
 			int len = read_to_buf(buf, BUFSIZE, i);
-			forward_to_intra(i);
+			forward_to_intra(i, len);
 			break;
 	}
 }

@@ -9,13 +9,13 @@ extern int exit_status;
 extern char* exit_name;
 extern int port;
 
-int encode(int connection_number){
+int encode(int connection_number, int length){
 	printf("encoding |%s|\n", buf);
 	//returns length of buffer;
 	enc_buf[0] = MBYTE;
 	enc_buf[1] = connection_number;
 	int i, enc_i;
-	for(i = 0, enc_i = 2; buf[i] != '\0'; i++, enc_i++){
+	for(i = 0, enc_i = 2; i < length; i++, enc_i++){
 		enc_buf[enc_i] = buf[i];
 		if(buf[i] == MBYTE){
 			enc_i++;
@@ -23,10 +23,10 @@ int encode(int connection_number){
 		}
 	}
 	//extra byte in decoding comes from here
-	enc_buf[enc_i] = '\0';
-	enc_buf[enc_i + 1] = MBYTE;
-	enc_buf[enc_i + 2] = 0;
-	return enc_i + 3;
+	//enc_buf[enc_i] = '\0'; //not comes
+	enc_buf[enc_i] = MBYTE;
+	enc_buf[enc_i + 1] = 0;
+	return enc_i + 2;
 }
 
 int decode(int *connection_number, int *enc_index_offset){
@@ -122,8 +122,8 @@ void send_operation(int connection_number, int operation){
 	send_to_intra(length);
 }
 
-void forward_to_intra(int i){
-	int length = encode(i);
+void forward_to_intra(int i, int raw_length){
+	int length = encode(i, raw_length);
 	send_to_intra(length);
 }
 

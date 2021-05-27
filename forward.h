@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <string.h>
@@ -15,7 +16,6 @@
 #define BACKLOG 255
 #define BUFSIZE 2048
 #define ENC_BUFSIZE 2*BUFSIZE
-#define MIN_ARGC 2
 #define CLOSED -1
 #define TIMEOUT 3000
 #define RECV_PORT 8000
@@ -23,14 +23,13 @@
 #define CONNECT 1
 #define DROP 2
 
-int encode(int connection_number);
-int decode(int *connection_number, int *enc_index_offset);
+void check_args(int argc, char *argv[]);
 
 int read_to_buf(char * buf, int bufsize, int i);
 void process_whole_enc_buf(int enc_len);
 
 void send_operation(int connection_number, int operation);
-void forward_to_intra(int i);
+void forward_to_intra(int i, int raw_length);
 void forward_to_endpoint(int i, int length);
 
 void server_close(int signal);

@@ -1,6 +1,7 @@
 #include "forward.h"
 #define INTRASOCK_INDEX 1
 #define OUTERSERV_INDEX 0
+#define MIN_ARGC 2
 
 struct pollfd fds[BACKLOG + 1];
 char buf[BUFSIZE];
@@ -106,8 +107,8 @@ void switch_behaviour(int i){
 
 		default:
 			if(logv) printf("to\n");
-			read_to_buf(buf, BUFSIZE, i);
-			forward_to_intra(i);
+			int length = read_to_buf(buf, BUFSIZE, i);
+			forward_to_intra(i, length);
 	}
 }
 
