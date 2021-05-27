@@ -105,39 +105,24 @@ void do_operation(){
 void switch_behaviour(int i){
 	printf("#################\n");
 	switch(i){
+
 		case INTRASERV_INDEX:
 			accept_one_pending_once(intraserver);
 			if(logv) printf("accept\n");
 			break;
+
 		case INTRASOCK_INDEX:
-			clearbufs();
 			if(logv) printf("to\n");
 			int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
 			process_whole_enc_buf(enc_len);
 			break;
+
 		default:
 			if(logv) printf("back\n");
 			int len = read_to_buf(buf, BUFSIZE, i);
 			forward_to_intra(i);
 			break;
 	}
-			// if(fds[i].fd == intraserver){
-			// 	accept_one_pending_once(intraserver);
-			// 	if(logv) printf("accept\n");
-
-			// } else if(fds[i].fd == intrasc){
-
-			// 	clearbufs();
-			// 	if(logv) printf("to\n");
-			// 	int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
-			// 	process_whole_enc_buf(enc_len);
-
-			// } else {
-
-			// 	if(logv) printf("back\n");
-			// 	int len = read_to_buf(buf, BUFSIZE, i);
-			// 	forward_to_intra(i);
-			// }
 }
 
 int main(int argc, char ** argv){

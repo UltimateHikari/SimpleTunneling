@@ -29,7 +29,6 @@ int decode(int *connection_number, int *enc_index_offset);
 int read_to_buf(char * buf, int bufsize, int i);
 void process_whole_enc_buf(int enc_len);
 
-void clearbufs();
 void send_operation(int connection_number, int operation);
 void forward_to_intra(int i);
 void forward_to_endpoint(int i, int length);

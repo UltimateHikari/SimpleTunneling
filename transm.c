@@ -1,15 +1,17 @@
 #include "forward.h"
+#define INTRASOCK_INDEX 1
+#define OUTERSERV_INDEX 0
 
 struct pollfd fds[BACKLOG + 1];
 char buf[BUFSIZE];
 char enc_buf[ENC_BUFSIZE];
-int intrasc;
+int intrasc, sc;
 
 int nfds = 2;
 int logv = 1;
 int port = 8080;
 int exit_status = -1;
-int exit_name = "transmitter";
+char* exit_name = "transmitter";
 
 void check_args(int argc, char *argv[]){
 	if(argc - 1 < MIN_ARGC){
@@ -36,7 +38,7 @@ void init_server(int *sc, int *intrasc, struct sockaddr_in *addr){
 	if(bind(*sc, (struct sockaddr*)addr, sizeof(*addr)) == -1){
 		perror("bind error");
 	}
-	if(listen(*sc, BACKLOGv) == -1){
+	if(listen(*sc, BACKLOG) == -1){
 		perror("listen error");
 	}
 
@@ -52,20 +54,20 @@ void init_server(int *sc, int *intrasc, struct sockaddr_in *addr){
 		perror("intraconnect error");
 		exit(EXIT_FAILURE);
 	}
-	fds[0].fd = *sc;
-	fds[1].fd = *intrasc;
-	fds[0].events = POLLIN;
-	fds[1].events = POLLIN;
+	fds[OUTERSERV_INDEX].fd = *sc;
+	fds[INTRASOCK_INDEX].fd = *intrasc;
+	fds[OUTERSERV_INDEX].events = POLLIN;
+	fds[INTRASOCK_INDEX].events = POLLIN;
 
 	printf("transmitter on [%d] set up and running\n", port);
 }
 
-void accept_one_pending(int sc, int intrasc){
+void accept_one_pending(){
 	int cl;
 	if((cl = accept(sc, NULL, NULL)) == -1){
 		perror("accept error");
 	}
-	if(nfds > BACKLOGv){
+	if(nfds > BACKLOG){
 		perror("too much connections, accepting but ignoring");
 		return;
 	}
@@ -87,12 +89,33 @@ void do_operation(){
 	}
 }
 
+void switch_behaviour(int i){
+	printf("#################\n");
+	switch(i){
+
+		case OUTERSERV_INDEX:
+			if(logv) printf("accept\n");
+			accept_one_pending();
+			break;
+
+		case INTRASOCK_INDEX:
+			if(logv) printf("back\n");
+			int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
+			process_whole_enc_buf(enc_len);
+			break;
+
+		default:
+			if(logv) printf("to\n");
+			read_to_buf(buf, BUFSIZE, i);
+			forward_to_intra(i);
+	}
+}
+
 int main(int argc, char ** argv){
 	check_args(argc, argv);
 	set_signal();
 
 	struct sockaddr_in addr;
-	int sc;
 	init_server(&sc, &intrasc, &addr);
 
 	for(;;){
@@ -115,26 +138,7 @@ int main(int argc, char ** argv){
 			}
 
 			test_for_poll_error(i);
-
-			printf("#################\n");
-			if(fds[i].fd == sc){
-				if(logv) printf("accept\n");
-				accept_one_pending(sc, intrasc);
-
-			} else if(fds[i].fd == intrasc){
-
-				if(logv) printf("back\n");
-				clearbufs();
-				int enc_len = read_to_buf(enc_buf, ENC_BUFSIZE, i);
-				process_whole_enc_buf(enc_len);
-
-			} else {
-
-				if(logv) printf("to\n");
-				clearbufs();
-				read_to_buf(buf, BUFSIZE, i);
-				forward_to_intra(i);
-			}
+			switch_behaviour(i);
 		}
 	}
 

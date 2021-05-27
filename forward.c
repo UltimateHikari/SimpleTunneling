@@ -48,7 +48,13 @@ int decode(int *connection_number, int *enc_index_offset){
 	}	
 }
 
+void clearbufs(){
+	memset(buf, 0, BUFSIZE);
+	memset(enc_buf, 0 , ENC_BUFSIZE);
+}
+
 int read_to_buf(char * buf, int bufsize, int i){
+	clearbufs();
 	int res, cl;
 	cl = fds[i].fd;
 	if( (res = read(cl, buf, bufsize)) > 0){
@@ -73,7 +79,7 @@ void process_whole_enc_buf(int enc_len){
 	int connection_number, enc_offset = 0;
 	while(enc_offset < enc_len){
 		int length = decode(&connection_number, &enc_offset);
-		printf("connection_number[%d] with %d\n", connection_number, length);
+		printf("connection_number[%d] with length %d\n", connection_number, length);
 		if(connection_number == 0){
 			do_operation();
 		}else{
@@ -83,22 +89,17 @@ void process_whole_enc_buf(int enc_len){
 	}
 }
 
-void clearbufs(){
-	memset(buf, 0, BUFSIZE);
-	memset(enc_buf, 0 , ENC_BUFSIZE);
-}
-
 void send_to_intra(int length){
 	int elength;
-	if (elength = write(intrasc, enc_buf, length) != length) {
-		if (length > 0) 
+	if ((elength = write(intrasc, enc_buf, length)) != length) {
+		if (elength > -1) 
 			fprintf(stderr,"partial write: %d/%d\n", elength, length);
 		else {
 			perror("write error");
 			exit(-1);
 		}
 	}
-	printf("[intra] %d bytes sent\n", length);
+	printf("[intra] %d bytes sent\n", elength);
 }
 
 void send_operation(int connection_number, int operation){
@@ -124,16 +125,17 @@ void forward_to_intra(int i){
 }
 
 void forward_to_endpoint(int i, int length){
-	if (write(fds[i].fd, buf, length) != length) {
-		if (length > 0) 
-			fprintf(stderr,"partial write");
+	int elength;
+	if ((elength = write(fds[i].fd, buf, length)) != length) {
+		if (elength > -1) 
+			fprintf(stderr,"partial write: %d/%d\n", elength, length);
 		else {
 			perror("write error");
 			exit(-1);
 		}
 	}
 
-	printf("[%d] %d bytes sent\n", i, length);
+	printf("[%d] %d bytes sent\n", i, elength);
 }
 
 void server_close(int signal){
