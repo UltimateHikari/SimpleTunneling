@@ -66,9 +66,10 @@ int read_to_buf(char * buf, int bufsize, int i){
 
 	if(res == 0){
 		printf("[%d] disconnected\n", i);
-		close(cl);
-		fds[i].fd = CLOSED;
-		//send_operation(i, DROP);
+		if(!(fds[i].fd == CLOSED)){
+			close(cl);
+			fds[i].fd = CLOSED;
+		}
 	}
 
 	if(res == -1){
@@ -82,7 +83,7 @@ void process_whole_enc_buf(int enc_len){
 	int connection_number, enc_offset = 0;
 	while(enc_offset < enc_len){
 		int length = decode(&connection_number, &enc_offset);
-		printf("connection_number[%d] with length %d\n", connection_number, length);
+		printf("processing frames from [%d] with length %d\n", connection_number, length);
 		if(connection_number == 0){
 			do_operation();
 		}else{
@@ -167,4 +168,12 @@ void test_for_poll_error(int i){
 		perror("poll error");
 		server_close(0);
 	}
+}
+
+void drop_by_index(int i){
+	if(write(fds[i].fd, '\0', 1) < 1){
+		perror("closing error");
+	}
+	close(fds[i].fd);
+	fds[i].fd = CLOSED;
 }

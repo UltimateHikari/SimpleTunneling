@@ -36,3 +36,4 @@ void server_close(int signal);
 void set_signal();
 void test_for_poll_error(int i);
 void do_operation();
+void drop_by_index(int i);

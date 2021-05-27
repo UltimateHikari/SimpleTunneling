@@ -84,8 +84,8 @@ void do_operation(){
 		printf("error: %s told to connect [%d]\n", exit_name, connection_number);
 		server_close(1);
 	} else {
-		close(fds[connection_number].fd);
-		fds[connection_number].fd = CLOSED;
+		if(logv) printf("[%d] dropping..\n");
+		drop_by_index(connection_number);
 		if(logv) printf("[%d] dropped from startpoint\n", connection_number);
 	}
 }
@@ -108,7 +108,11 @@ void switch_behaviour(int i){
 		default:
 			if(logv) printf("to\n");
 			int length = read_to_buf(buf, BUFSIZE, i);
-			forward_to_intra(i, length);
+			if(length == 0){
+				send_operation(i, DROP);
+			} else {
+				forward_to_intra(i, length);
+			}
 	}
 }
 
@@ -128,7 +132,6 @@ int main(int argc, char ** argv){
 		}
 
 		if(res == 0){
-			//printf("poll [%dms]: expired\n", TIMEOUT);
 			continue;
 		}
 

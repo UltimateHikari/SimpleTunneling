@@ -107,8 +107,8 @@ void do_operation(){
 		connect_new(connection_number);
 		if(logv) printf("[%d] connected to endpoint\n", connection_number);
 	} else {
-		close(fds[connection_number].fd);
-		fds[connection_number].fd = CLOSED;
+		if(logv) printf("[%d] dropping..\n");
+		drop_by_index(connection_number);
 		if(logv) printf("[%d] dropped from endpoint\n", connection_number);
 	}
 }
@@ -131,7 +131,11 @@ void switch_behaviour(int i){
 		default:
 			if(logv) printf("back\n");
 			int len = read_to_buf(buf, BUFSIZE, i);
-			forward_to_intra(i, len);
+			if(len == 0){
+				send_operation(i, DROP);
+			} else {
+				forward_to_intra(i, len);
+			}
 			break;
 	}
 }
@@ -153,7 +157,6 @@ int main(int argc, char ** argv){
 		}
 
 		if(res == 0){
-			//printf("poll [%dms]: expired\n", TIMEOUT);
 			continue;
 		}
 
